@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# t/setup
+
+# Set script to exit on error
+set -e
+
+echo "🚀 Setting up project..."
+
+# Frontend setup
+echo "📦 Installing frontend dependencies..."
+yarn install
+
+# Backend setup
+echo "☕ Setting up Java dependencies..."
+cd backend
+
+# Check if Java is installed
+if ! command -v java &> /dev/null; then
+    echo "❌ Java not found. Please install Java 17 or higher."
+    echo "Visit https://adoptium.net/ for installation instructions."
+    exit 1
+fi
+
+# Check Java version
+JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | awk -F '.' '{print $1}')
+if [ "$JAVA_VERSION" -lt 17 ]; then
+    echo "❌ Java 17 or higher is required. Found version: $JAVA_VERSION"
+    exit 1
+fi
+
+# Check if Maven Wrapper exists
+if [ ! -f "./mvnw" ]; then
+    echo "❌ Maven Wrapper not found. Please run 'mvn wrapper:wrapper' in the backend directory first."
+    echo "See README.md for instructions."
+    exit 1
+fi
+
+# Install Maven dependencies using wrapper
+echo "📦 Installing Maven dependencies..."
+./mvnw clean install
+
+cd ..
+
+echo "✅ Setup complete!"
+echo "To start the project, run: ./t/start"
+

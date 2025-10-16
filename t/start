@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# t/start
+
+# Set script to exit on error
+set -e
+
+# Define cleanup function
+cleanup() {
+  echo "🧹 Cleaning up processes..."
+  # Kill the Java server if it's running
+  if [ ! -z "$JAVA_PID" ] && ps -p $JAVA_PID > /dev/null; then
+    echo "🛑 Stopping Java server (PID: $JAVA_PID)..."
+    kill $JAVA_PID
+  fi
+  exit 0
+}
+
+# Register the cleanup function to run on script termination
+trap cleanup EXIT INT TERM
+
+# Prepare frontend dependencies
+echo "📦 Installing JS dependencies..."
+yarn
+
+# Start Java/Spring Boot server in the background
+echo "☕ Starting Spring Boot server..."
+cd backend
+./mvnw spring-boot:run &
+JAVA_PID=$!
+
+# Wait a moment to ensure Spring Boot server starts properly
+sleep 3
+echo "✅ Spring Boot server running with PID: $JAVA_PID"
+
+# Navigate back to root directory
+cd ..
+
+# Start Next server
+echo "⭐ Starting Next server..."
+yarn dev
+
