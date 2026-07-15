@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$ROOT_DIR"
+
+echo "Checking development tools..."
+"$SCRIPT_DIR/doctor"
+
+if command -v corepack >/dev/null 2>&1; then
+  YARN=(corepack yarn)
+else
+  YARN=(yarn)
+fi
+
+echo "Installing frontend dependencies..."
+"${YARN[@]}" install --immutable
+
+echo "Downloading backend dependencies..."
+(
+  cd backend
+  ./mvnw --no-transfer-progress dependency:go-offline -DskipTests
+)
+
+echo "Setup complete. Run: t/start"
