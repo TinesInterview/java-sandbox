@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$ROOT_DIR"
+
+MIN_JAVA_MAJOR=17
+MAX_JAVA_MAJOR=25
+EXPECTED_NODE_MAJOR=22
+EXPECTED_YARN_VERSION=4.13.0
+failures=0
+
+pass() {
+  printf 'ok  %s\n' "$1"
+}
+
+fail() {
+  printf 'err %s\n' "$1" >&2
+  failures=$((failures + 1))
+}
+
+warn() {
+  printf 'warn %s\n' "$1"
+}
+
+echo "Development environment"
+
+if command -v java >/dev/null 2>&1 && command -v javac >/dev/null 2>&1; then
+  JAVA_VERSION="$(java -version 2>&1 | awk -F '"' '/version/ {print $2; exit}')"
+  JAVA_MAJOR="${JAVA_VERSION%%.*}"
+  if [[ "$JAVA_MAJOR" == "1" ]]; then
+    JAVA_MAJOR="$(printf '%s' "$JAVA_VERSION" | cut -d. -f2)"
+  fi
+
+  if [[ "$JAVA_MAJOR" =~ ^[0-9]+$ ]] && (( JAVA_MAJOR >= MIN_JAVA_MAJOR && JAVA_MAJOR <= MAX_JAVA_MAJOR )); then
+    pass "JDK $JAVA_VERSION"
+  else
+    fail "JDK $MIN_JAVA_MAJOR through $MAX_JAVA_MAJOR is supported; found $JAVA_VERSION. Run 'sdk env install && sdk env' or configure JAVA_HOME."
+  fi
+else
+  fail "A JDK is required. Install JDK $MIN_JAVA_MAJOR through $MAX_JAVA_MAJOR and ensure java and javac are on PATH."
+fi
+
+if command -v node >/dev/null 2>&1; then
+  NODE_VERSION="$(node --version)"
+  NODE_MAJOR="${NODE_VERSION#v}"
+  NODE_MAJOR="${NODE_MAJOR%%.*}"
+  if [[ "$NODE_MAJOR" == "$EXPECTED_NODE_MAJOR" ]]; then
+    pass "Node.js $NODE_VERSION"
+  else
+    fail "Node.js $EXPECTED_NODE_MAJOR is required; found $NODE_VERSION. Use the version in .node-version."
+  fi
+else
+  fail "Node.js $EXPECTED_NODE_MAJOR is required. Use the version in .node-version."
+fi
+
+if command -v corepack >/dev/null 2>&1; then
+  YARN_VERSION="$(corepack yarn --version 2>/dev/null || true)"
+elif command -v yarn >/dev/null 2>&1; then
+  YARN_VERSION="$(yarn --version 2>/dev/null || true)"
+else
+  YARN_VERSION=""
+fi
+
+if [[ "$YARN_VERSION" == "$EXPECTED_YARN_VERSION" ]]; then
+  pass "Yarn $YARN_VERSION"
+elif [[ -n "$YARN_VERSION" ]]; then
+  fail "Yarn $EXPECTED_YARN_VERSION is required; found $YARN_VERSION. Run 'corepack enable'."
+else
+  fail "Yarn $EXPECTED_YARN_VERSION is required. Run 'corepack enable'."
+fi
+
+if [[ -x backend/mvnw ]]; then
+  pass "Maven wrapper"
+else
+  fail "backend/mvnw is missing or is not executable."
+fi
+
+if command -v lsof >/dev/null 2>&1; then
+  for port in 3000 8000; do
+    if lsof -n -P -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+      warn "Port $port is already in use."
+    else
+      pass "Port $port is available"
+    fi
+  done
+else
+  warn "lsof is unavailable; skipped port checks."
+fi
+
+if [[ "$failures" -gt 0 ]]; then
+  printf '\n%d environment check(s) failed.\n' "$failures" >&2
+  exit 1
+fi
+
+echo "Environment looks ready."

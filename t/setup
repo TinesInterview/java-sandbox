@@ -1,47 +1,28 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# t/setup
+set -euo pipefail
 
-# Set script to exit on error
-set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "🚀 Setting up project..."
+cd "$ROOT_DIR"
 
-# Frontend setup
-echo "📦 Installing frontend dependencies..."
-yarn install
+echo "Checking development tools..."
+"$SCRIPT_DIR/doctor"
 
-# Backend setup
-echo "☕ Setting up Java dependencies..."
-cd backend
-
-# Check if Java is installed
-if ! command -v java &> /dev/null; then
-    echo "❌ Java not found. Please install Java 17 or higher."
-    echo "Visit https://adoptium.net/ for installation instructions."
-    exit 1
+if command -v corepack >/dev/null 2>&1; then
+  YARN=(corepack yarn)
+else
+  YARN=(yarn)
 fi
 
-# Check Java version
-JAVA_VERSION=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | awk -F '.' '{print $1}')
-if [ "$JAVA_VERSION" -lt 17 ]; then
-    echo "❌ Java 17 or higher is required. Found version: $JAVA_VERSION"
-    exit 1
-fi
+echo "Installing frontend dependencies..."
+"${YARN[@]}" install --immutable
 
-# Check if Maven Wrapper exists
-if [ ! -f "./mvnw" ]; then
-    echo "❌ Maven Wrapper not found. Please run 'mvn wrapper:wrapper' in the backend directory first."
-    echo "See README.md for instructions."
-    exit 1
-fi
+echo "Downloading backend dependencies..."
+(
+  cd backend
+  ./mvnw --no-transfer-progress dependency:go-offline -DskipTests
+)
 
-# Install Maven dependencies using wrapper
-echo "📦 Installing Maven dependencies..."
-./mvnw clean install
-
-cd ..
-
-echo "✅ Setup complete!"
-echo "To start the project, run: ./t/start"
-
+echo "Setup complete. Run: t/start"

@@ -1,42 +1,53 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# t/start
+set -euo pipefail
 
-# Set script to exit on error
-set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+JAVA_PID=""
 
-# Define cleanup function
 cleanup() {
-  echo "🧹 Cleaning up processes..."
-  # Kill the Java server if it's running
-  if [ ! -z "$JAVA_PID" ] && ps -p $JAVA_PID > /dev/null; then
-    echo "🛑 Stopping Java server (PID: $JAVA_PID)..."
-    kill $JAVA_PID
+  status=$?
+  trap - EXIT INT TERM
+
+  if [[ -n "$JAVA_PID" ]] && kill -0 "$JAVA_PID" 2>/dev/null; then
+    echo "Stopping backend (PID: $JAVA_PID)..."
+    kill "$JAVA_PID" 2>/dev/null || true
+    wait "$JAVA_PID" 2>/dev/null || true
   fi
-  exit 0
+
+  exit "$status"
 }
 
-# Register the cleanup function to run on script termination
 trap cleanup EXIT INT TERM
 
-# Prepare frontend dependencies
-echo "📦 Installing JS dependencies..."
-yarn
+cd "$ROOT_DIR"
+"$SCRIPT_DIR/doctor"
 
-# Start Java/Spring Boot server in the background
-echo "☕ Starting Spring Boot server..."
-cd backend
-./mvnw spring-boot:run &
+if [[ ! -d node_modules ]]; then
+  echo "Frontend dependencies are missing. Run: t/setup" >&2
+  exit 1
+fi
+
+if command -v corepack >/dev/null 2>&1; then
+  YARN=(corepack yarn)
+else
+  YARN=(yarn)
+fi
+
+echo "Starting Spring Boot on http://localhost:8000..."
+(
+  cd backend
+  exec ./mvnw spring-boot:run
+) &
 JAVA_PID=$!
 
-# Wait a moment to ensure Spring Boot server starts properly
-sleep 3
-echo "✅ Spring Boot server running with PID: $JAVA_PID"
+sleep 1
+if ! kill -0 "$JAVA_PID" 2>/dev/null; then
+  echo "The backend exited during startup. Review the output above." >&2
+  wait "$JAVA_PID"
+fi
 
-# Navigate back to root directory
-cd ..
-
-# Start Next server
-echo "⭐ Starting Next server..."
-yarn dev
-
+echo "Backend process started; Maven may still be compiling."
+echo "Starting Next.js on http://localhost:3000..."
+"${YARN[@]}" dev

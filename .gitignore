@@ -11,9 +11,12 @@ target/
 
 # Node.js / React
 node_modules/
+.pnp.*
+.yarn/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.tsbuildinfo
 
 # Build output
 dist/
@@ -38,4 +41,3 @@ out/
 # Logs
 logs/
 *.log
-

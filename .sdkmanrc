@@ -1,0 +1,3 @@
+# Pin the JDK for this project (Java 17, matching backend/pom.xml).
+# Install SDKMAN (https://sdkman.io), then run `sdk env install` && `sdk env`.
+java=17.0.13-tem
